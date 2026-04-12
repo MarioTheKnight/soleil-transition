@@ -106,3 +106,40 @@ func _ready():
     # Déclenché quand la nouvelle scène est 100% visible
     SceneTransition.transition_finished.connect(func(): print("Bonjour !"))
 ```
+
+---
+
+## Reference
+
+### Signaux
+
+| Signal | Parametres | Description |
+|--------|------------|-------------|
+| `transition_started` | aucun | Emis quand le fondu au noir commence |
+| `transition_finished` | aucun | Emis quand la nouvelle scene est 100% visible |
+
+### Enum TransitionType
+
+| Valeur | Description |
+|--------|-------------|
+| `FADE` | Fondu au noir puis fondu d'ouverture (defaut : 0.4s chaque) |
+| `INSTANT` | Changement immediat sans animation |
+
+### Constantes
+
+| Constante | Valeur | Description |
+|-----------|--------|-------------|
+| `DEFAULT_DURATION` | `0.4` | Duree de fondu par defaut (secondes) |
+
+### Methodes
+
+| Methode | Description |
+|---------|-------------|
+| `to(scene_path: String, type: TransitionType = FADE, duration: float = 0.4, stop_music: bool = false)` | Transition vers une scene |
+| `is_transitioning() -> bool` | `true` si une transition est en cours |
+
+### Dependances
+
+| Module | Requis ? | Integration |
+|--------|----------|-------------|
+| `soleil_audio` | non | Si present et `stop_music = true` : coupe la musique au moment le plus sombre du fondu |
