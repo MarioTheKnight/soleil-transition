@@ -64,6 +64,35 @@ func to(scene_path: String,
 	_is_transitioning = false
 
 
+## Fades to black, runs [param action] at the darkest frame, then fades back
+## in. For host games with a PERSISTENT shell that swaps panel content
+## instead of changing the whole scene (the shell never reloads).
+## Awaitable ; no-op if a transition is already in progress.
+func fade_over(action: Callable,
+		duration: float = DEFAULT_DURATION) -> void:
+	if _is_transitioning:
+		return
+	_is_transitioning = true
+	transition_started.emit()
+
+	var t_out: Tween = create_tween()
+	t_out.tween_property(_overlay, "modulate:a", 1.0, duration) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	await t_out.finished
+
+	if action.is_valid():
+		action.call()
+	await get_tree().process_frame
+
+	var t_in: Tween = create_tween()
+	t_in.tween_property(_overlay, "modulate:a", 0.0, duration) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	await t_in.finished
+
+	transition_finished.emit()
+	_is_transitioning = false
+
+
 ## Returns true if a transition is currently in progress.
 func is_transitioning() -> bool:
 	return _is_transitioning
