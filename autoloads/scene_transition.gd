@@ -45,12 +45,16 @@ func _ready() -> void:
 ## [param type]: One of [enum TransitionType] values.
 ## [param duration]: Duration of each half (out + in) in seconds.
 ## [param stop_music]: If true, fades out music before switching scenes (requires SoleilAudio).
+## [br]
+## Returns [code]false[/code] if another transition was already running and this
+## call was refused — callers that care (a menu that must not swallow its own
+## button) can react instead of guessing.
 func to(scene_path: String,
 		type: TransitionType = TransitionType.FADE,
 		duration: float = DEFAULT_DURATION,
-		stop_music: bool = false) -> void:
+		stop_music: bool = false) -> bool:
 	if _is_transitioning:
-		return
+		return false
 	_is_transitioning = true
 	transition_started.emit()
 
@@ -62,35 +66,34 @@ func to(scene_path: String,
 
 	transition_finished.emit()
 	_is_transitioning = false
+	return true
 
 
 ## Fades to black, runs [param action] at the darkest frame, then fades back
 ## in. For host games with a PERSISTENT shell that swaps panel content
 ## instead of changing the whole scene (the shell never reloads).
-## Awaitable ; no-op if a transition is already in progress.
+## Awaitable. Returns [code]false[/code] if a transition was already in
+## progress and this call was refused.
 func fade_over(action: Callable,
-		duration: float = DEFAULT_DURATION) -> void:
+		duration: float = DEFAULT_DURATION) -> bool:
 	if _is_transitioning:
-		return
+		return false
 	_is_transitioning = true
 	transition_started.emit()
 
-	var t_out: Tween = create_tween()
-	t_out.tween_property(_overlay, "modulate:a", 1.0, duration) \
-		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	var t_out: Tween = _fade_tween(1.0, duration, Tween.EASE_IN)
 	await t_out.finished
 
 	if action.is_valid():
 		action.call()
 	await get_tree().process_frame
 
-	var t_in: Tween = create_tween()
-	t_in.tween_property(_overlay, "modulate:a", 0.0, duration) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	var t_in: Tween = _fade_tween(0.0, duration, Tween.EASE_OUT)
 	await t_in.finished
 
 	transition_finished.emit()
 	_is_transitioning = false
+	return true
 
 
 ## Returns true if a transition is currently in progress.
@@ -102,11 +105,24 @@ func is_transitioning() -> bool:
 # Private — transition implementations
 # ---------------------------------------------------------------------------
 
+## A transition tween to [param target_alpha] on the overlay.
+## [br]
+## [b]Ignores [member Engine.time_scale][/b]: a screen transition is chrome, not
+## gameplay. Hostage to time scale, a hit stop (or any slow-motion effect) stalls
+## the fade — and because [member _is_transitioning] only clears when the tween
+## ends, EVERY later transition is silently refused. A single 0.08s hit stop that
+## failed to restore time scale was enough to make a game unnavigable.
+func _fade_tween(target_alpha: float, duration: float, ease: Tween.EaseType) -> Tween:
+	var tween: Tween = create_tween()
+	tween.set_ignore_time_scale(true)
+	tween.tween_property(_overlay, "modulate:a", target_alpha, duration) \
+		.set_ease(ease).set_trans(Tween.TRANS_QUAD)
+	return tween
+
+
 func _do_fade(scene_path: String, duration: float, stop_music: bool) -> void:
 	# Phase 1: fade out to black
-	var t_out: Tween = create_tween()
-	t_out.tween_property(_overlay, "modulate:a", 1.0, duration) \
-		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	var t_out: Tween = _fade_tween(1.0, duration, Tween.EASE_IN)
 	await t_out.finished
 
 	# Optionally stop music at the darkest frame
@@ -119,9 +135,7 @@ func _do_fade(scene_path: String, duration: float, stop_music: bool) -> void:
 	await get_tree().process_frame
 
 	# Phase 3: fade in from black
-	var t_in: Tween = create_tween()
-	t_in.tween_property(_overlay, "modulate:a", 0.0, duration) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	var t_in: Tween = _fade_tween(0.0, duration, Tween.EASE_OUT)
 	await t_in.finished
 
 
